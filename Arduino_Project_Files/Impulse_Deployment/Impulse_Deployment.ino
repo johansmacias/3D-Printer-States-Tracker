@@ -16,7 +16,9 @@
 
 /* Includes ---------------------------------------------------------------- */
 #include <Classify_3D_Printer_States_inferencing.h>
-#include <Arduino_LSM9DS1.h> //Click here to get the library: http://librarymanager/All#Arduino_LSM9DS1
+#include "SparkFunLIS3DH.h" //http://librarymanager/All#SparkFun-LIS3DH
+
+LIS3DH AccelerometerSensor(I2C_MODE, 0x18);
 
 /* Constant defines -------------------------------------------------------- */
 #define CONVERT_G_TO_MS2    9.80665f
@@ -51,11 +53,10 @@ void setup()
     while (!Serial);
     Serial.println("Edge Impulse Inferencing Demo");
 
-    if (!IMU.begin()) {
-        ei_printf("Failed to initialize IMU!\r\n");
-    }
-    else {
-        ei_printf("IMU initialized\r\n");
+    if (AccelerometerSensor.begin() != 0) {
+        Serial.println("Problem starting the accelerometer sensor at 0x18.");
+    } else {
+        Serial.println("Accelerometer sensor at 0x18 started.");
     }
 
     if (EI_CLASSIFIER_RAW_SAMPLES_PER_FRAME != 3) {
@@ -94,7 +95,11 @@ void loop()
         // Determine the next tick (and then sleep later)
         uint64_t next_tick = micros() + (EI_CLASSIFIER_INTERVAL_MS * 1000);
 
-        IMU.readAcceleration(buffer[ix], buffer[ix + 1], buffer[ix + 2]);
+        // Read accelerometer sensor values
+        float x, y, z;
+        buffer[ix] = AccelerometerSensor.readFloatAccelX();
+        buffer[ix + 1] = AccelerometerSensor.readFloatAccelY();
+        buffer[ix + 2] = AccelerometerSensor.readFloatAccelZ();
 
         for (int i = 0; i < 3; i++) {
             if (fabs(buffer[ix + i]) > MAX_ACCEPTED_RANGE) {
