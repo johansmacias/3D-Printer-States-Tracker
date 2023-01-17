@@ -63,6 +63,32 @@ void setup()
         ei_printf("ERR: EI_CLASSIFIER_RAW_SAMPLES_PER_FRAME should be equal to 3 (the 3 sensor axes)\n");
         return;
     }
+
+    bool ret;
+    api.ble.uart.start();
+    Serial.print("Get BLE Advertising status : ");
+    bool get_dav_status = api.ble.advertise.status();
+    Serial.println(get_dav_status);
+    if (get_dav_status) {
+        char dev_name[12] =
+        { 'P', 'r', 'i', 'n', 't', ' ', 'S', 't', 'a', 't', 'e', '\0' };
+        Serial.print("Set BLE Advertising Name : ");
+        Serial.println(dev_name);
+        if (!(ret = api.ble.settings.broadcastName.set(dev_name, 12))) {
+            Serial.
+            printf
+            ("BLE Configuration - set broadcast name is incorrect! \r\n");
+            return;
+        }
+        Serial.
+        println("+++++++++++++++++ START Advertising +++++++++++++++++");
+        if (!(ret = api.ble.advertise.start(0))) {
+            Serial.
+            printf
+            ("BLE Configuration - set start advertise parameter is incorrect! \r\n");
+            return;
+        }
+    }
 }
 
 /**
@@ -136,12 +162,22 @@ void loop()
     ei_printf("(DSP: %d ms., Classification: %d ms., Anomaly: %d ms.)",
         result.timing.dsp, result.timing.classification, result.timing.anomaly);
     ei_printf(": \n");
+
+    float max_clasification_value = result.classification[0].value;
+    const char *max_clasification_label = result.classification[0].label;
     for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
         ei_printf("    %s: %.5f\n", result.classification[ix].label, result.classification[ix].value);
+        max_clasification_value = max(result.classification[ix].value, max_clasification_value);
+        if(result.classification[ix].value == max_clasification_value) {
+            max_clasification_label = result.classification[ix].label;
+        }
     }
 #if EI_CLASSIFIER_HAS_ANOMALY == 1
     ei_printf("    anomaly score: %.3f\n", result.anomaly);
 #endif
+
+    Serial6.printf("+EVT:EI_Inference,Ender_3,%s,%.5f\n", max_clasification_label, max_clasification_value);
+    Serial.printf("+EVT:EI_Inference,Ender_3,%s,%.5f\n", max_clasification_label, max_clasification_value);
 }
 
 #if !defined(EI_CLASSIFIER_SENSOR) || EI_CLASSIFIER_SENSOR != EI_CLASSIFIER_SENSOR_ACCELEROMETER
