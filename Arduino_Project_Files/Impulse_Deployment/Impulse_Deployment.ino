@@ -20,6 +20,9 @@
 
 LIS3DH AccelerometerSensor(I2C_MODE, 0x18);
 
+const char *classifications_buffer[3] = { 0 };
+const char *last_reported_classification = "0";
+
 /* Constant defines -------------------------------------------------------- */
 #define CONVERT_G_TO_MS2    9.80665f
 #define MAX_ACCEPTED_RANGE  2.0f        // starting 03/2022, models are generated setting range to +-2, but this example use Arudino library which set range to +-4g. If you are using an older model, ignore this value and use 4.0f instead
@@ -176,8 +179,28 @@ void loop()
     ei_printf("    anomaly score: %.3f\n", result.anomaly);
 #endif
 
-    Serial6.printf("+EVT:EI_Inference,Ender_3,%s,%.5f\n", max_clasification_label, max_clasification_value);
-    Serial.printf("+EVT:EI_Inference,Ender_3,%s,%.5f\n", max_clasification_label, max_clasification_value);
+    classifications_buffer[0] = classifications_buffer[1];
+    classifications_buffer[1] = classifications_buffer[2];
+    classifications_buffer[2] = max_clasification_label;
+
+    Serial.printf("classifications_buffer[2] : %s\n", classifications_buffer[2]);
+    Serial.printf("classifications_buffer[1] : %s\n", classifications_buffer[1]);
+    Serial.printf("classifications_buffer[0] : %s\n", classifications_buffer[0]);
+
+    if ((classifications_buffer[2] == classifications_buffer[1]) && (classifications_buffer[1] == classifications_buffer[0])) {
+        Serial.println("The last 3 classifications have been the same label");
+        if (max_clasification_label != last_reported_classification) {
+            Serial.println("Reporting new state...");
+            Serial6.printf("+EVT:EI_Inference,Ender_3,%s,%.5f\n", max_clasification_label, max_clasification_value);
+            Serial.printf("+EVT:EI_Inference,Ender_3,%s,%.5f\n", max_clasification_label, max_clasification_value);
+            last_reported_classification = max_clasification_label;
+        } else {
+            Serial.println("Skip the report because the state is the same reported the last time.");
+        }
+    } else {
+        Serial.println("The last 3 classifications have NOT been the same value.");
+    }
+
 }
 
 #if !defined(EI_CLASSIFIER_SENSOR) || EI_CLASSIFIER_SENSOR != EI_CLASSIFIER_SENSOR_ACCELEROMETER
