@@ -20,8 +20,9 @@
 
 LIS3DH AccelerometerSensor(I2C_MODE, 0x18);
 
-const char *classifications_buffer[3] = { 0 };
-const char *last_reported_classification = "0";
+const char *classifications_buffer[5] = { 0 };
+const char *last_reported_classification = "0\n";
+float last_reported_classification_value = 0;
 
 /* Constant defines -------------------------------------------------------- */
 #define CONVERT_G_TO_MS2    9.80665f
@@ -54,7 +55,7 @@ void setup()
     Serial.begin(115200);
     // comment out the below line to cancel the wait for USB connection (needed for native USB)
     while (!Serial);
-    Serial.println("Edge Impulse Inferencing Demo");
+    Serial.println("Monitoring 3D Printer States - Impulse Deployment");
 
     if (AccelerometerSensor.begin() != 0) {
         Serial.println("Problem starting the accelerometer sensor at 0x18.");
@@ -68,6 +69,7 @@ void setup()
     }
 
     bool ret;
+    Serial6.begin(115200, RAK_CUSTOM_MODE);
     api.ble.uart.start();
     Serial.print("Get BLE Advertising status : ");
     bool get_dav_status = api.ble.advertise.status();
@@ -181,24 +183,46 @@ void loop()
 
     classifications_buffer[0] = classifications_buffer[1];
     classifications_buffer[1] = classifications_buffer[2];
-    classifications_buffer[2] = max_clasification_label;
+    classifications_buffer[2] = classifications_buffer[3];
+    classifications_buffer[3] = classifications_buffer[4];
+    classifications_buffer[4] = max_clasification_label;
 
-    Serial.printf("classifications_buffer[2] : %s\n", classifications_buffer[2]);
-    Serial.printf("classifications_buffer[1] : %s\n", classifications_buffer[1]);
     Serial.printf("classifications_buffer[0] : %s\n", classifications_buffer[0]);
+    Serial.printf("classifications_buffer[1] : %s\n", classifications_buffer[1]);
+    Serial.printf("classifications_buffer[2] : %s\n", classifications_buffer[2]);
+    Serial.printf("classifications_buffer[3] : %s\n", classifications_buffer[3]);
+    Serial.printf("classifications_buffer[4] : %s\n", classifications_buffer[4]);
 
-    if ((classifications_buffer[2] == classifications_buffer[1]) && (classifications_buffer[1] == classifications_buffer[0])) {
-        Serial.println("The last 3 classifications have been the same label");
+    if ((classifications_buffer[4] == classifications_buffer[3]) &&
+        (classifications_buffer[3] == classifications_buffer[2]) &&
+        (classifications_buffer[2] == classifications_buffer[1]) &&
+        (classifications_buffer[1] == classifications_buffer[0])) {
+        Serial.println("The last 5 classifications have been the same label");
         if (max_clasification_label != last_reported_classification) {
             Serial.println("Reporting new state...");
             Serial6.printf("+EVT:EI_Inference,Ender_3,%s,%.5f\n", max_clasification_label, max_clasification_value);
             Serial.printf("+EVT:EI_Inference,Ender_3,%s,%.5f\n", max_clasification_label, max_clasification_value);
             last_reported_classification = max_clasification_label;
+            last_reported_classification_value = max_clasification_value;
         } else {
             Serial.println("Skip the report because the state is the same reported the last time.");
         }
     } else {
-        Serial.println("The last 3 classifications have NOT been the same value.");
+        Serial.println("The last 5 classifications have NOT been the same value.");
+    }
+
+    if (api.ble.uart.available()) {
+        Serial.println("Data available from UART");
+        char ble_cmd_rcv[2];
+        sprintf(ble_cmd_rcv, "%X", api.ble.uart.read());
+        const char *ble_cmd_01 = "AB";
+
+        if (strcmp(ble_cmd_rcv, ble_cmd_01) == 0) {
+            Serial6.printf("+EVT:EI_Inference,Ender_3,%s,%.5f\n", last_reported_classification, last_reported_classification_value);
+            Serial.println("Sent over BLE");
+        } else {
+            Serial.println("Not sent over BLE");
+        }
     }
 
 }
